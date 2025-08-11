@@ -1,0 +1,11 @@
+{
+  "labels":[
+    "cancel_appointment",
+    "fallback",
+    "faq",
+    "reschedule_appointment",
+    "book_appointment"
+  ],
+  "threshold":0.0,
+  "positive_label":null
+}

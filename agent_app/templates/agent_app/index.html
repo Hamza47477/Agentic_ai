@@ -1,0 +1,159 @@
+<!-- your_app_name/templates/your_app_name/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Wellness Clinic</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #2b6cb0, #9f7aea); /* Beautiful blue to purple gradient */
+            overflow: hidden; /* Prevent unwanted scrolling */
+        }
+        .glow-effect {
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.5), 0 0 30px rgba(59, 130, 246, 0.4); /* Subtle glowing effect */
+            transition: box-shadow 0.3s ease-in-out;
+        }
+        .glow-effect:hover {
+            box-shadow: 0 0 25px rgba(255, 255, 255, 0.7), 0 0 50px rgba(59, 130, 246, 0.6);
+        }
+        .animate-glow {
+            animation: glow-pulse 2s infinite alternate;
+        }
+        @keyframes glow-pulse {
+            from { box-shadow: 0 0 10px rgba(59, 130, 246, 0.3); }
+            to { box-shadow: 0 0 30px rgba(59, 130, 246, 0.6); }
+        }
+        .message-bubble {
+            background: linear-gradient(145deg, #ffffff, #e6e6e6);
+            border-radius: 12px;
+            padding: 8px 12px;
+            margin: 4px 0;
+            transition: transform 0.2s ease-in-out;
+        }
+        .message-bubble:hover {
+            transform: translateY(-2px); /* Slight lift on hover */
+        }
+        /* Responsive adjustments */
+        @media (max-width: 640px) {
+            .container {
+                padding: 1rem;
+            }
+            h1 {
+                font-size: 1.75rem;
+            }
+            .message-bubble {
+                padding: 6px 10px;
+            }
+        }
+    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body class="flex items-center justify-center min-h-screen w-full">
+    <div class="container bg-white/95 backdrop-blur-md p-6 rounded-2xl shadow-2xl w-full max-w-3xl h-[90vh] flex flex-col glow-effect animate-glow">
+        <h1 class="text-4xl font-bold mb-6 text-center text-gray-900 tracking-tight">Wellness Clinic</h1>
+        <div id="messages" class="flex-1 mb-6 p-4 bg-gray-100/80 rounded-xl overflow-y-auto border border-blue-300 shadow-inner">
+            <!-- Messages will appear here -->
+        </div>
+        <div class="flex items-center space-x-3">
+            <input type="text" id="messageInput" class="flex-1 p-3 border border-blue-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 glow-effect bg-white/90 text-gray-900 placeholder-gray-500" placeholder="Type a message to the clinic...">
+            <button id="sendMessage" class="bg-blue-600 text-white p-3 rounded-lg font-semibold hover:bg-blue-700 transition duration-300 ease-in-out glow-effect">Send</button>
+        </div>
+    </div>
+
+    <script>
+        const messageInput = document.getElementById('messageInput');
+        const sendMessageButton = document.getElementById('sendMessage');
+        const messagesDiv = document.getElementById('messages');
+
+        // Determine WebSocket URL based on current location
+        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const wsUrl = `${protocol}${window.location.host}/ws/agent/`;
+        const chatSocket = new WebSocket(wsUrl);
+
+        chatSocket.onopen = function(e) {
+            console.log('WebSocket connection established!');
+            // System messages (like "Connected") are still useful for debugging in console
+            // appendMessage('System', 'Connected to clinic.', 'text-blue-600'); // Removed from display
+        };
+
+        chatSocket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            const messageType = data.type;
+            const messageContent = data.message;
+            const senderInfo = data.sender || 'Clinic'; // Default to 'Clinic' if sender is not explicitly set
+
+            console.log('Received message:', data); // Always log full data for debugging
+
+            let sender = senderInfo; // Use sender info from data
+            let colorClass = 'text-gray-900'; // Default color
+
+            // Determine display based on messageType
+            switch (messageType) {
+                case 'agent_response':
+                    sender = 'Clinic'; // User-friendly name
+                    colorClass = 'text-blue-700';
+                    appendMessage(sender, messageContent, colorClass);
+                    break;
+                case 'status_update':
+                    console.log(`Clinic Status: ${messageContent}`);
+                    break;
+                case 'final_answer':
+                    sender = 'Clinic'; // User-friendly name
+                    colorClass = 'text-green-700 font-bold';
+                    appendMessage(sender, messageContent, colorClass);
+                    break;
+                case 'debug_info':
+                    console.log(`DEBUG: ${messageContent}`);
+                    break;
+                case 'error':
+                    console.error(`ERROR from Backend: ${messageContent}`);
+                    appendMessage('Clinic', 'An error occurred. Please try again.', 'text-red-600');
+                    break;
+                case 'reset_confirmed':
+                    console.log(`Reset Confirmed: ${messageContent}`);
+                    break;
+                default:
+                    console.warn(`Unhandled message type '${messageType}': ${messageContent}`);
+            }
+        };
+
+        chatSocket.onclose = function(e) {
+            console.error('WebSocket closed unexpectedly:', e);
+            appendMessage('System', 'Disconnected from clinic.', 'text-red-600');
+        };
+
+        chatSocket.onerror = function(e) {
+            console.error('WebSocket error:', e);
+            appendMessage('System', 'WebSocket error occurred.', 'text-red-600');
+        };
+
+        sendMessageButton.onclick = function(e) {
+            const message = messageInput.value;
+            if (message.trim()) {
+                chatSocket.send(JSON.stringify({
+                    'message': message
+                }));
+                appendMessage('You', message, 'text-gray-900');
+                messageInput.value = ''; // Clear input after sending
+            }
+        };
+
+        // Allow sending message with Enter key
+        messageInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessageButton.click();
+            }
+        });
+
+        function appendMessage(sender, content, colorClass = '') {
+            const messageElement = document.createElement('div'); // Changed to div for better styling
+            messageElement.classList.add('message-bubble', 'py-2', 'px-3', 'mb-2', 'break-words');
+            messageElement.innerHTML = `<strong class="${colorClass}">${sender}:</strong> ${content}`;
+            messagesDiv.appendChild(messageElement);
+            // Scroll to the bottom
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+    </script>
+</body>
+</html>
